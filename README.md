@@ -214,4 +214,6 @@ Not done: a mark that shows a panel would get a window of its own, the floating 
 
 ## Licence
 
-No licence has been chosen for this code. Slint itself is under the GPL 3.0, a royalty-free licence, or a commercial licence. See [Slint's licences](https://slint.dev/pricing).
+MIT. See [LICENSE](LICENSE).
+
+This code depends on Slint, which is under the GPL 3.0, a royalty-free licence, or a commercial licence. You pick one of those for Slint. See [Slint's licences](https://slint.dev/pricing). The MIT licence here works with all of them.
