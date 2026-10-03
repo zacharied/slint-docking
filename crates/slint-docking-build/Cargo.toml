@@ -1,0 +1,10 @@
+[package]
+name = "slint-docking-build"
+description = "Build script support for slint-docking: holds the .slint components and tells the Slint compiler where they are"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+slint-build = { workspace = true }

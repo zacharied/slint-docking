@@ -1,0 +1,16 @@
+[package]
+name = "slint-docking-tests"
+description = "Tests of slint-docking that drive a window, without a display"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+slint-docking = { workspace = true, features = ["serde"] }
+slint = { workspace = true, features = ["accessibility"] }
+i-slint-backend-testing = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+slint-docking-build = { workspace = true }

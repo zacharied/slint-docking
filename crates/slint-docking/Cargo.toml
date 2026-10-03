@@ -1,0 +1,15 @@
+[package]
+name = "slint-docking"
+description = "Docking for Slint: panels in tab groups and splits, rearranged by dragging"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Saving and reading a layout.
+serde = ["slint-docking-layout/serde"]
+
+[dependencies]
+slint-docking-layout = { workspace = true }
+slint = { workspace = true }

@@ -1,0 +1,187 @@
+// The demo's windows.
+
+import { Button, Palette, HorizontalBox } from "std-widgets.slint";
+import { DockArea, DockPanel, DockBackend } from "@docking";
+import { BrowserView, ChartView, InspectorView, LogView, PreviewView, TimelineView, Transport } from "panels.slint";
+
+// Needed by `slint_docking::attach!`.
+export { DockBackend, DockTheme } from "@docking";
+export { Transport }
+
+export struct PanelToggle {
+    key: string,
+    title: string,
+    open: bool,
+    floating: bool,
+}
+
+export global App {
+    in property <[PanelToggle]> panels;
+    callback toggle(key: string);
+    callback float(key: string);
+    callback reset-layout();
+}
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> on;
+    callback clicked <=> touch.clicked;
+
+    width: label.preferred-width + 20px;
+    height: 24px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: root.on ? Palette.accent-background : Palette.border;
+    background: root.on ? Palette.accent-background.with-alpha(touch.has-hover ? 0.35 : 0.2) : touch.has-hover ? Palette.foreground.with-alpha(0.06) : transparent;
+
+    label := Text {
+        text: root.text;
+        color: Palette.foreground;
+        font-size: 12px;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+    }
+
+    touch := TouchArea { }
+}
+
+export component MainWindow inherits Window {
+    title: "slint-docking demo";
+    preferred-width: 1280px;
+    preferred-height: 760px;
+    background: Palette.alternate-background;
+
+    VerticalLayout {
+        HorizontalLayout {
+            padding: 8px;
+            spacing: 6px;
+            alignment: start;
+
+            Text {
+                text: "Panels";
+                color: Palette.foreground;
+                vertical-alignment: center;
+            }
+
+            for panel in App.panels: Chip {
+                text: panel.title;
+                on: panel.open;
+                clicked => {
+                    App.toggle(panel.key);
+                }
+            }
+
+            Rectangle {
+                width: 12px;
+            }
+
+            Text {
+                text: "Float";
+                color: Palette.foreground;
+                vertical-alignment: center;
+            }
+
+            for panel in App.panels: Chip {
+                text: panel.title;
+                on: panel.floating;
+                clicked => {
+                    App.float(panel.key);
+                }
+            }
+
+            Rectangle {
+                width: 12px;
+            }
+
+            Chip {
+                text: "Reset layout";
+                clicked => {
+                    App.reset-layout();
+                }
+            }
+        }
+
+        DockArea {
+            DockPanel {
+                key: "browser";
+                title: "Browser";
+                BrowserView { }
+            }
+
+            DockPanel {
+                key: "chart";
+                title: "Chart";
+                closable: false;
+                ChartView { }
+            }
+
+            DockPanel {
+                key: "preview";
+                title: "Preview";
+                PreviewView { }
+            }
+
+            DockPanel {
+                key: "inspector";
+                title: "Inspector";
+                InspectorView { }
+            }
+
+            DockPanel {
+                key: "timeline";
+                title: "Timeline";
+                TimelineView { }
+            }
+
+            DockPanel {
+                key: "log";
+                title: "Log";
+                LogView { }
+            }
+        }
+    }
+}
+
+// A second window. Its panels are made when the layout places them in it, and are gone
+// when they leave, so whatever state they must keep has to live in Rust, as `Transport`
+// does.
+export component FloatingWindow inherits Window {
+    title: "slint-docking demo: floating";
+    preferred-width: 520px;
+    preferred-height: 420px;
+    background: Palette.alternate-background;
+
+    DockArea {
+        if DockBackend.holds("browser", DockBackend.generation): DockPanel {
+            key: "browser";
+            title: "Browser";
+            BrowserView { }
+        }
+        if DockBackend.holds("chart", DockBackend.generation): DockPanel {
+            key: "chart";
+            title: "Chart";
+            closable: false;
+            ChartView { }
+        }
+        if DockBackend.holds("preview", DockBackend.generation): DockPanel {
+            key: "preview";
+            title: "Preview";
+            PreviewView { }
+        }
+        if DockBackend.holds("inspector", DockBackend.generation): DockPanel {
+            key: "inspector";
+            title: "Inspector";
+            InspectorView { }
+        }
+        if DockBackend.holds("timeline", DockBackend.generation): DockPanel {
+            key: "timeline";
+            title: "Timeline";
+            TimelineView { }
+        }
+        if DockBackend.holds("log", DockBackend.generation): DockPanel {
+            key: "log";
+            title: "Log";
+            LogView { }
+        }
+    }
+}

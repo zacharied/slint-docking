@@ -1,0 +1,127 @@
+// The window that the tests drive.
+
+import { DockArea, DockPanel, DockBackend } from "@docking";
+export { DockBackend, DockTheme } from "@docking";
+
+// Content with state of its own, to show that a panel keeps its content when it moves.
+component Counter inherits Rectangle {
+    in property <string> name;
+    property <int> count;
+
+    Text {
+        text: root.name + ": " + root.count;
+        accessible-role: text;
+        accessible-label: "count " + root.name;
+        accessible-value: root.count;
+    }
+
+    TouchArea {
+        clicked => {
+            root.count += 1;
+        }
+    }
+}
+
+export component Fixture inherits Window {
+    preferred-width: 1000px;
+    preferred-height: 600px;
+
+    in property <string> delta-title: "Delta";
+    in property <bool> has-late: false;
+
+    DockArea {
+        DockPanel {
+            key: "a";
+            title: "Alpha";
+            Counter {
+                name: "a";
+            }
+        }
+
+        DockPanel {
+            key: "b";
+            title: "Beta";
+            Counter {
+                name: "b";
+            }
+        }
+
+        DockPanel {
+            key: "c";
+            title: "Gamma";
+            closable: false;
+            Counter {
+                name: "c";
+            }
+        }
+
+        DockPanel {
+            key: "d";
+            title: root.delta-title;
+            Counter {
+                name: "d";
+            }
+        }
+
+        if root.has-late: DockPanel {
+            key: "late";
+            title: "Late";
+            Counter {
+                name: "late";
+            }
+        }
+    }
+}
+
+// A window whose dock area is not the whole window.
+export component Inset inherits Window {
+    preferred-width: 1000px;
+    preferred-height: 600px;
+
+    VerticalLayout {
+        Rectangle {
+            height: 40px;
+        }
+
+        HorizontalLayout {
+            Rectangle {
+                width: 100px;
+            }
+
+            DockArea {
+                DockPanel {
+                    key: "a";
+                    title: "Alpha";
+                }
+
+                DockPanel {
+                    key: "b";
+                    title: "Beta";
+                }
+            }
+        }
+    }
+}
+
+// A window whose panels exist only while the window holds them.
+export component Floating inherits Window {
+    preferred-width: 600px;
+    preferred-height: 400px;
+
+    DockArea {
+        if DockBackend.holds("a", DockBackend.generation): DockPanel {
+            key: "a";
+            title: "Alpha";
+            Counter {
+                name: "a";
+            }
+        }
+        if DockBackend.holds("b", DockBackend.generation): DockPanel {
+            key: "b";
+            title: "Beta";
+            Counter {
+                name: "b";
+            }
+        }
+    }
+}

@@ -1,0 +1,205 @@
+// The content of the demo's panels. None of it knows that it is docked.
+//
+// These stand in for the panels of a chart editor. They hold state of their own, such as
+// scroll positions and the text of fields, to show that a panel keeps its state when it is
+// moved.
+
+import { CheckBox, LineEdit, ListView, Palette, ScrollView, Slider, SpinBox, TextEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+// State that lives in Rust, so that every window shows the same.
+export global Transport {
+    in property <int> beat;
+    in property <bool> playing: true;
+    callback toggle-playing();
+}
+
+export component BrowserView inherits Rectangle {
+    ListView {
+        for song[index] in [
+            "Zest", "Viyella's Tears", "Lazy Addiction", "GOODTEK", "Opfer", "Apollo",
+            "Titania", "Don't Fight The Music", "FREEDOM DiVE", "AMAZING MIGHTYYYY!!!!",
+            "Ai Nov", "Caliburne", "MarbleBlue.", "LAMIA", "YURUSHITE", "Singularity",
+            "Falsum Atlantis.", "Viyella's Nightmare", "Good bye, Merry-Go-Round.",
+        ]: Rectangle {
+            height: 26px;
+            background: touch.has-hover ? Palette.foreground.with-alpha(0.06) : transparent;
+            Text {
+                x: 10px;
+                text: song;
+                vertical-alignment: center;
+                color: Palette.foreground;
+            }
+
+            touch := TouchArea { }
+        }
+    }
+}
+
+export component ChartView inherits Rectangle {
+    background: #15161c;
+    property <[{lane: int, at: int, long: int, tint: color}]> notes: [
+        { lane: 0, at: 40, long: 0, tint: #e84a5f },
+        { lane: 1, at: 100, long: 0, tint: #4ade80 },
+        { lane: 2, at: 160, long: 120, tint: #60a5fa },
+        { lane: 1, at: 250, long: 0, tint: #4ade80 },
+        { lane: 0, at: 330, long: 90, tint: #e84a5f },
+        { lane: 2, at: 420, long: 0, tint: #60a5fa },
+        { lane: 1, at: 480, long: 0, tint: #4ade80 },
+        { lane: 0, at: 560, long: 0, tint: #e84a5f },
+        { lane: 2, at: 620, long: 160, tint: #60a5fa },
+        { lane: 1, at: 720, long: 0, tint: #4ade80 },
+        { lane: 0, at: 840, long: 0, tint: #e84a5f },
+    ];
+    property <length> lane-width: min(90px, self.width / 4);
+    property <length> field-x: (self.width - 3 * lane-width) / 2;
+
+    Flickable {
+        content-height: 1000px;
+        for line in 25: Rectangle {
+            y: line * 40px;
+            height: 1px;
+            background: mod(line, 4) == 0 ? #ffffff40 : #ffffff14;
+        }
+        for lane in 4: Rectangle {
+            x: root.field-x + lane * root.lane-width;
+            width: 1px;
+            height: 1000px;
+            background: #ffffff30;
+        }
+        for note in root.notes: Rectangle {
+            x: root.field-x + note.lane * root.lane-width + 4px;
+            y: note.at * 1px;
+            width: root.lane-width - 8px;
+            height: 12px + note.long * 1px;
+            border-radius: 4px;
+            background: note.tint;
+            opacity: note.long > 0 ? 0.75 : 1;
+        }
+        Rectangle {
+            y: mod(Transport.beat, 25) * 40px;
+            height: 2px;
+            background: #facc15;
+        }
+    }
+}
+
+export component PreviewView inherits Rectangle {
+    background: @linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%);
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        Text {
+            text: "Beat " + Transport.beat;
+            font-size: 28px;
+            color: white;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: Transport.playing ? "Playing" : "Paused";
+            color: #ffffffa0;
+            horizontal-alignment: center;
+        }
+    }
+
+    TouchArea {
+        clicked => {
+            Transport.toggle-playing();
+        }
+    }
+}
+
+export component InspectorView inherits Rectangle {
+    ScrollView {
+        VerticalBox {
+            alignment: start;
+            Text {
+                text: "Note";
+                font-weight: 700;
+                color: Palette.foreground;
+            }
+
+            HorizontalBox {
+                padding: 0;
+                Text {
+                    text: "Lane";
+                    vertical-alignment: center;
+                    min-width: 60px;
+                    color: Palette.foreground;
+                }
+
+                LineEdit {
+                    text: "Left A";
+                }
+            }
+
+            HorizontalBox {
+                padding: 0;
+                Text {
+                    text: "Tick";
+                    vertical-alignment: center;
+                    min-width: 60px;
+                    color: Palette.foreground;
+                }
+
+                SpinBox {
+                    value: 480;
+                    maximum: 100000;
+                }
+            }
+
+            HorizontalBox {
+                padding: 0;
+                Text {
+                    text: "Offset";
+                    vertical-alignment: center;
+                    min-width: 60px;
+                    color: Palette.foreground;
+                }
+
+                Slider {
+                    value: 30;
+                }
+            }
+
+            CheckBox {
+                text: "Critical";
+            }
+
+            CheckBox {
+                text: "Docked to lane";
+                checked: true;
+            }
+        }
+    }
+}
+
+export component TimelineView inherits Rectangle {
+    background: #15161c;
+    property <[{row: int, from: int, to: int, tint: color}]> spans: [
+        { row: 0, from: 0, to: 35, tint: #f97316 },
+        { row: 0, from: 40, to: 90, tint: #f97316 },
+        { row: 1, from: 10, to: 60, tint: #a78bfa },
+        { row: 2, from: 25, to: 45, tint: #22d3ee },
+        { row: 2, from: 55, to: 100, tint: #22d3ee },
+    ];
+    for span in root.spans: Rectangle {
+        x: root.width * span.from / 100;
+        y: 8px + span.row * 24px;
+        width: root.width * (span.to - span.from) / 100;
+        height: 18px;
+        border-radius: 3px;
+        background: span.tint;
+    }
+    Rectangle {
+        x: root.width * mod(Transport.beat, 25) / 25;
+        width: 2px;
+        background: #facc15;
+    }
+}
+
+export component LogView inherits Rectangle {
+    TextEdit {
+        text: "Read Zest.ogkr: 1,204 commands, no diagnostics\nLifted 812 objects\nType here. The text stays when the panel is moved.";
+    }
+}

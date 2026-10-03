@@ -1,0 +1,379 @@
+// The docking system's components.
+//
+// An application uses `DockArea` and `DockPanel`, and may set `DockTheme`. Everything else
+// here is the link between the components and the Rust side, which `slint_docking::attach!`
+// takes care of.
+
+import { Palette } from "std-widgets.slint";
+
+export struct DockRect {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+}
+
+export struct DockPanelRect {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    shown: bool,
+}
+
+export struct DockGroupRect {
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+    tab-width: length,
+}
+
+export struct DockTabView {
+    key: string,
+    title: string,
+    active: bool,
+    closable: bool,
+}
+
+export struct DockGroupView {
+    id: int,
+    tabs: [DockTabView],
+}
+
+export struct DockSplitterView {
+    split: int,
+    handle: int,
+    // Whether the bar is dragged left and right.
+    horizontal: bool,
+}
+
+export struct DockPreview {
+    shown: bool,
+    x: length,
+    y: length,
+    width: length,
+    height: length,
+}
+
+// Colours and sizes of what the docking system draws. Set these from Slint or from Rust.
+export global DockTheme {
+    in-out property <brush> tab-bar-background: Palette.alternate-background;
+    in-out property <brush> tab-background: transparent;
+    in-out property <brush> tab-hover-background: Palette.foreground.with-alpha(0.06);
+    in-out property <brush> tab-active-background: Palette.background;
+    in-out property <brush> tab-foreground: Palette.foreground.with-alpha(0.65);
+    in-out property <brush> tab-active-foreground: Palette.foreground;
+    in-out property <brush> accent: Palette.accent-background;
+    in-out property <brush> splitter: Palette.border;
+    in-out property <brush> panel-background: Palette.background;
+    in-out property <brush> preview: Palette.accent-background.with-alpha(0.25);
+    in-out property <length> font-size: 12px;
+    // How far the pointer moves with the button down before a tab is being dragged.
+    in-out property <length> drag-threshold: 6px;
+}
+
+// The link to the Rust side. One per window.
+export global DockBackend {
+    // Written by every panel as it is created: key, title and whether it can be closed,
+    // separated by U+001F, and ended by U+001E. A panel cannot call into Rust as it is
+    // created, because the window is created before Rust can set any callback.
+    in-out property <string> declared;
+    in-out property <int> declared-count;
+    callback panel-declared();
+    callback title-changed(slot: int, title: string);
+
+    // Goes up whenever the layout changes. The rectangle callbacks take it so that
+    // whatever they are bound to is worked out again.
+    in property <int> generation;
+    in property <[DockGroupView]> groups;
+    in property <[DockSplitterView]> splitters;
+    in property <DockPreview> preview;
+    in property <bool> dragging;
+    in property <string> drag-title;
+
+    // Rectangles are asked for with the size of the area, so that they follow the
+    // window as it is resized, in the same frame.
+    pure callback panel-rect(slot: int, width: length, height: length, generation: int) -> DockPanelRect;
+    // The tabs of a group. This one also tells where the area is in the window, which
+    // is needed to take a point from one window to another.
+    pure callback group-rect(index: int, width: length, height: length, area-x: length, area-y: length, generation: int) -> DockGroupRect;
+    pure callback splitter-rect(index: int, width: length, height: length, generation: int) -> DockRect;
+    // Whether this window holds a panel. For a panel that is declared under `if`.
+    pure callback holds(key: string, generation: int) -> bool;
+
+    callback tab-pressed(key: string);
+    callback tab-closed(key: string);
+    callback drag-started(key: string);
+    callback drag-moved(x: length, y: length, width: length, height: length);
+    callback drag-dropped(x: length, y: length, width: length, height: length);
+    callback drag-cancelled();
+    callback splitter-dragged(split: int, handle: int, x: length, y: length, width: length, height: length);
+}
+
+// A panel. Put anything inside. It must be a child of a `DockArea`.
+//
+// The content is created once and is never created again, however the panel is moved, so
+// it keeps its state.
+export component DockPanel {
+    // Names the panel in the layout, and in a saved layout. Must not change.
+    in property <string> key;
+    // The text of the panel's tab.
+    in property <string> title: key;
+    // Whether the panel's tab has a button to close it.
+    in property <bool> closable: true;
+    // Whether the panel is in front. False while it is closed or a tab behind another.
+    out property <bool> shown: area.shown;
+
+    property <int> slot: -1;
+    property <DockPanelRect> area: DockBackend.panel-rect(slot, self.width, self.height, DockBackend.generation);
+
+    // The panel covers the whole area and takes no input itself. Only the frame is
+    // placed, because an element cannot be given a rectangle from outside a layout
+    // in terms of its parent, but its children can.
+    width: 100%;
+    height: 100%;
+
+    init => {
+        slot = DockBackend.declared-count;
+        DockBackend.declared-count += 1;
+        DockBackend.declared += key + "\u{1f}" + title + "\u{1f}" + (closable ? "1" : "0") + "\u{1e}";
+        DockBackend.panel-declared();
+    }
+    changed title => {
+        DockBackend.title-changed(slot, title);
+    }
+
+    frame := Rectangle {
+        x: area.x;
+        y: area.y;
+        width: area.width;
+        height: area.height;
+        visible: area.shown;
+        clip: true;
+        background: DockTheme.panel-background;
+        accessible-role: tab-panel;
+        accessible-label: root.title;
+        @children
+    }
+}
+
+component DockTab inherits Rectangle {
+    in property <DockTabView> tab;
+    // The position of the pointer in the area, while a button is down on the tab.
+    out property <length> pointer-x: touch.absolute-position.x + touch.mouse-x - area-x;
+    out property <length> pointer-y: touch.absolute-position.y + touch.mouse-y - area-y;
+    in property <length> area-x;
+    in property <length> area-y;
+    property <bool> dragging;
+
+    callback pressed();
+    callback closed();
+    callback drag-started();
+    callback drag-moved();
+    callback drag-dropped();
+    callback drag-cancelled();
+
+    background: tab.active ? DockTheme.tab-active-background : touch.has-hover ? DockTheme.tab-hover-background : DockTheme.tab-background;
+    accessible-role: AccessibleRole.tab;
+    accessible-label: tab.title;
+    accessible-item-selected: tab.active;
+    accessible-action-default => {
+        root.pressed();
+    }
+
+    // The line that marks the tab in front.
+    Rectangle {
+        y: 0;
+        height: 2px;
+        background: tab.active ? DockTheme.accent : transparent;
+    }
+
+    Text {
+        x: 10px;
+        width: parent.width - 10px - (close.visible ? close.width + 6px : 10px);
+        text: tab.title;
+        color: tab.active ? DockTheme.tab-active-foreground : DockTheme.tab-foreground;
+        font-size: DockTheme.font-size;
+        vertical-alignment: center;
+        overflow: elide;
+        accessible-role: none;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                root.pressed();
+            } else if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
+                if root.dragging {
+                    root.dragging = false;
+                    root.drag-dropped();
+                }
+            } else if event.button == PointerEventButton.middle && event.kind == PointerEventKind.up {
+                if tab.closable && !root.dragging {
+                    root.closed();
+                }
+            } else if event.kind == PointerEventKind.cancel {
+                if root.dragging {
+                    root.dragging = false;
+                    root.drag-cancelled();
+                }
+            }
+        }
+        moved => {
+            if self.pressed {
+                if !root.dragging && (abs((self.mouse-x - self.pressed-x) / 1px) > DockTheme.drag-threshold / 1px || abs((self.mouse-y - self.pressed-y) / 1px) > DockTheme.drag-threshold / 1px) {
+                    root.dragging = true;
+                    root.drag-started();
+                }
+                if root.dragging {
+                    root.drag-moved();
+                }
+            }
+        }
+    }
+
+    close := Rectangle {
+        x: parent.width - self.width - 4px;
+        y: (parent.height - self.height) / 2;
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        visible: tab.closable && (tab.active || touch.has-hover || close-touch.has-hover) && parent.width > 48px;
+        background: close-touch.has-hover ? DockTheme.tab-hover-background : transparent;
+        accessible-role: button;
+        accessible-label: "Close " + tab.title;
+        accessible-action-default => {
+            root.closed();
+        }
+
+        Text {
+            text: "×";
+            color: DockTheme.tab-foreground;
+            font-size: DockTheme.font-size + 2px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
+
+        close-touch := TouchArea {
+            clicked => {
+                root.closed();
+            }
+        }
+    }
+}
+
+// The area that panels are docked in. Its children are the panels.
+export component DockArea inherits Rectangle {
+    property <length> drag-x;
+    property <length> drag-y;
+
+    panels := Rectangle {
+        @children
+    }
+
+    for group[index] in DockBackend.groups: Rectangle {
+        property <DockGroupRect> area: DockBackend.group-rect(index, root.width, root.height, root.absolute-position.x, root.absolute-position.y, DockBackend.generation);
+        x: area.x;
+        y: area.y;
+        width: area.width;
+        height: area.height;
+        background: DockTheme.tab-bar-background;
+        clip: true;
+        accessible-role: tab-list;
+
+        for tab[place] in group.tabs: tab-item := DockTab {
+            x: place * area.tab-width;
+            width: area.tab-width;
+            tab: tab;
+            area-x: root.absolute-position.x;
+            area-y: root.absolute-position.y;
+            pressed => {
+                DockBackend.tab-pressed(tab.key);
+            }
+            closed => {
+                DockBackend.tab-closed(tab.key);
+            }
+            drag-started => {
+                root.drag-x = self.pointer-x;
+                root.drag-y = self.pointer-y;
+                DockBackend.drag-started(tab.key);
+            }
+            drag-moved => {
+                root.drag-x = self.pointer-x;
+                root.drag-y = self.pointer-y;
+                DockBackend.drag-moved(self.pointer-x, self.pointer-y, root.width, root.height);
+            }
+            drag-dropped => {
+                DockBackend.drag-dropped(self.pointer-x, self.pointer-y, root.width, root.height);
+            }
+            drag-cancelled => {
+                DockBackend.drag-cancelled();
+            }
+        }
+    }
+
+    for bar[index] in DockBackend.splitters: splitter := Rectangle {
+        property <DockRect> area: DockBackend.splitter-rect(index, root.width, root.height, DockBackend.generation);
+        x: area.x;
+        y: area.y;
+        width: area.width;
+        height: area.height;
+        background: bar-touch.has-hover || bar-touch.pressed ? DockTheme.accent : DockTheme.splitter;
+        accessible-role: none;
+
+        bar-touch := TouchArea {
+            mouse-cursor: bar.horizontal ? MouseCursor.col-resize : MouseCursor.row-resize;
+            moved => {
+                if self.pressed {
+                    // Keep the point of the bar that was pressed under the pointer.
+                    DockBackend.splitter-dragged(
+                        bar.split,
+                        bar.handle,
+                        self.absolute-position.x - root.absolute-position.x + self.mouse-x - self.pressed-x + self.width / 2,
+                        self.absolute-position.y - root.absolute-position.y + self.mouse-y - self.pressed-y + self.height / 2,
+                        root.width,
+                        root.height);
+                }
+            }
+        }
+    }
+
+    // Where the dragged panel would go.
+    preview := Rectangle {
+        x: DockBackend.preview.x;
+        y: DockBackend.preview.y;
+        width: DockBackend.preview.width;
+        height: DockBackend.preview.height;
+        visible: DockBackend.preview.shown;
+        background: DockTheme.preview;
+        border-width: 1px;
+        border-color: DockTheme.accent;
+        accessible-role: none;
+    }
+
+    // The dragged tab, beside the pointer.
+    if DockBackend.dragging: Rectangle {
+        x: root.drag-x + 14px;
+        y: root.drag-y + 10px;
+        width: min(ghost-text.preferred-width + 20px, 200px);
+        height: 24px;
+        border-radius: 3px;
+        background: DockTheme.tab-active-background;
+        border-width: 1px;
+        border-color: DockTheme.accent;
+        opacity: 0.9;
+        accessible-role: none;
+
+        ghost-text := Text {
+            x: 10px;
+            width: parent.width - 20px;
+            text: DockBackend.drag-title;
+            color: DockTheme.tab-active-foreground;
+            font-size: DockTheme.font-size;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
