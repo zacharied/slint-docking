@@ -87,6 +87,11 @@ pub use slint;
 ///
 /// The window shows one host of the layout, host 0 unless another is given.
 ///
+/// The window's `DockTheme.tab-bar-height` and `DockTheme.splitter-thickness` become the
+/// dock's [`Metrics::tab_bar_height`] and [`Metrics::splitter`], now and whenever they
+/// change. The `DockArea` tells of a change through `DockBackend.sizes-changed`, which Slint
+/// runs when the event loop next runs.
+///
 /// The macro uses the Rust types that Slint generates for `dock.slint`. They exist only if
 /// the `.slint` file of the window has the line `export { DockBackend, DockTheme } from "@docking";`. They must be
 /// in scope where the macro is called, or in the module given as `types`.
@@ -112,7 +117,7 @@ macro_rules! attach {
             #[allow(unused_imports)]
             use $($types)::+::{
                 DockBackend, DockGroupRect, DockGroupView, DockPanelRect, DockPreview, DockRect,
-                DockSplitterView, DockTabView,
+                DockSplitterView, DockTabView, DockTheme,
             };
         )?
         use $crate::slint::ComponentHandle as _;
@@ -231,6 +236,14 @@ macro_rules! attach {
                 dock.splitter_dragged(host, split, handle, x, y, width, height)
             }
         });
+        backend.on_sizes_changed({
+            let dock = dock.clone();
+            move |tab_bar_height, splitter| dock.sizes_changed(tab_bar_height, splitter)
+        });
+        {
+            let theme = window.global::<DockTheme>();
+            dock.sizes_changed(theme.get_tab_bar_height(), theme.get_splitter_thickness());
+        }
 
         dock.attach_host(
             host,

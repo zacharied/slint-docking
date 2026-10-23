@@ -57,6 +57,11 @@ export struct DockPreview {
 }
 
 // Colours and sizes of what the docking system draws. Set these from Slint or from Rust.
+//
+// The colours default to those of the Slint style in use, and the sizes to the docking
+// system's own. `tab-bar-height` and `splitter-thickness` are also sizes of the layout:
+// `attach!` gives them to the dock's `Metrics` when the window is attached and whenever
+// they change, in place of what `Dock::with_metrics` was given.
 export global DockTheme {
     in-out property <brush> tab-bar-background: Palette.alternate-background;
     in-out property <brush> tab-background: transparent;
@@ -71,6 +76,21 @@ export global DockTheme {
     in-out property <length> font-size: 12px;
     // How far the pointer moves with the button down before a tab is being dragged.
     in-out property <length> drag-threshold: 6px;
+    // The font of every text the docking system draws. Empty is the window's default.
+    in-out property <string> font-family;
+    // The height of the strip of tabs above a group.
+    in-out property <length> tab-bar-height: 28px;
+    // The thickness of the bar between two groups.
+    in-out property <length> splitter-thickness: 4px;
+    // The line along the top of the tab in front. Transparent draws none.
+    in-out property <brush> tab-active-indicator: accent;
+    // A line one pixel thick along the bottom of each strip of tabs, which the tab in
+    // front covers, so that it joins its panel. Transparent draws none.
+    in-out property <brush> line: transparent;
+    // The rounding of the close button and of the dragged tab.
+    in-out property <length> radius: 3px;
+    // The space before a tab's title, and on both sides of the dragged tab's title.
+    in-out property <length> tab-padding: 10px;
 }
 
 // The link to the Rust side. One per window.
@@ -109,6 +129,8 @@ export global DockBackend {
     callback drag-dropped(x: length, y: length, width: length, height: length);
     callback drag-cancelled();
     callback splitter-dragged(split: int, handle: int, x: length, y: length, width: length, height: length);
+    // `DockTheme.tab-bar-height` or `DockTheme.splitter-thickness` changed.
+    callback sizes-changed(tab-bar-height: length, splitter-thickness: length);
 }
 
 // A panel. Put anything inside. It must be a child of a `DockArea`.
@@ -183,17 +205,19 @@ component DockTab inherits Rectangle {
     }
 
     // The line that marks the tab in front.
-    Rectangle {
+    indicator := Rectangle {
         y: 0;
         height: 2px;
-        background: tab.active ? DockTheme.accent : transparent;
+        visible: tab.active && DockTheme.tab-active-indicator != transparent;
+        background: DockTheme.tab-active-indicator;
     }
 
     Text {
-        x: 10px;
-        width: parent.width - 10px - (close.visible ? close.width + 6px : 10px);
+        x: DockTheme.tab-padding;
+        width: parent.width - DockTheme.tab-padding - (close.visible ? close.width + 6px : DockTheme.tab-padding);
         text: tab.title;
         color: tab.active ? DockTheme.tab-active-foreground : DockTheme.tab-foreground;
+        font-family: DockTheme.font-family;
         font-size: DockTheme.font-size;
         vertical-alignment: center;
         overflow: elide;
@@ -238,7 +262,7 @@ component DockTab inherits Rectangle {
         y: (parent.height - self.height) / 2;
         width: 16px;
         height: 16px;
-        border-radius: 3px;
+        border-radius: DockTheme.radius;
         visible: tab.closable && (tab.active || touch.has-hover || close-touch.has-hover) && parent.width > 48px;
         background: close-touch.has-hover ? DockTheme.tab-hover-background : transparent;
         accessible-role: button;
@@ -250,6 +274,7 @@ component DockTab inherits Rectangle {
         Text {
             text: "×";
             color: DockTheme.tab-foreground;
+            font-family: DockTheme.font-family;
             font-size: DockTheme.font-size + 2px;
             horizontal-alignment: center;
             vertical-alignment: center;
@@ -268,12 +293,22 @@ component DockTab inherits Rectangle {
 export component DockArea inherits Rectangle {
     property <length> drag-x;
     property <length> drag-y;
+    // Copies of the theme's sizes of the layout, to tell the Rust side when they change.
+    property <length> tab-bar-height: DockTheme.tab-bar-height;
+    property <length> splitter-thickness: DockTheme.splitter-thickness;
+
+    changed tab-bar-height => {
+        DockBackend.sizes-changed(tab-bar-height, splitter-thickness);
+    }
+    changed splitter-thickness => {
+        DockBackend.sizes-changed(tab-bar-height, splitter-thickness);
+    }
 
     panels := Rectangle {
         @children
     }
 
-    for group[index] in DockBackend.groups: Rectangle {
+    for group[index] in DockBackend.groups: tab-bar := Rectangle {
         property <DockGroupRect> area: DockBackend.group-rect(index, root.width, root.height, root.absolute-position.x, root.absolute-position.y, DockBackend.generation);
         x: area.x;
         y: area.y;
@@ -282,6 +317,15 @@ export component DockArea inherits Rectangle {
         background: DockTheme.tab-bar-background;
         clip: true;
         accessible-role: tab-list;
+
+        // Before the tabs, so that the tab in front, drawn over it, covers it.
+        line := Rectangle {
+            y: parent.height - 1px;
+            height: 1px;
+            visible: DockTheme.line != transparent;
+            background: DockTheme.line;
+            accessible-role: none;
+        }
 
         for tab[place] in group.tabs: tab-item := DockTab {
             x: place * area.tab-width;
@@ -357,9 +401,9 @@ export component DockArea inherits Rectangle {
     if DockBackend.dragging: Rectangle {
         x: root.drag-x + 14px;
         y: root.drag-y + 10px;
-        width: min(ghost-text.preferred-width + 20px, 200px);
-        height: 24px;
-        border-radius: 3px;
+        width: min(ghost-text.preferred-width + 2 * DockTheme.tab-padding, 200px);
+        height: DockTheme.tab-bar-height - 2px;
+        border-radius: DockTheme.radius;
         background: DockTheme.tab-active-background;
         border-width: 1px;
         border-color: DockTheme.accent;
@@ -367,10 +411,11 @@ export component DockArea inherits Rectangle {
         accessible-role: none;
 
         ghost-text := Text {
-            x: 10px;
-            width: parent.width - 20px;
+            x: DockTheme.tab-padding;
+            width: parent.width - 2 * DockTheme.tab-padding;
             text: DockBackend.drag-title;
             color: DockTheme.tab-active-foreground;
+            font-family: DockTheme.font-family;
             font-size: DockTheme.font-size;
             vertical-alignment: center;
             overflow: elide;

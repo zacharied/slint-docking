@@ -1,6 +1,6 @@
 // The window that the tests drive.
 
-import { DockArea, DockPanel, DockBackend } from "@docking";
+import { DockArea, DockPanel, DockBackend, DockTheme } from "@docking";
 export { DockBackend, DockTheme } from "@docking";
 
 // Content with state of its own, to show that a panel keeps its content when it moves.
@@ -23,6 +23,12 @@ component Counter inherits Rectangle {
 }
 
 export component Fixture inherits Window {
+    // The height of the tab bar that `metrics()` gives, which the tests are written against.
+    // The theme's sizes replace those of the metrics when the window is attached.
+    init => {
+        DockTheme.tab-bar-height = 30px;
+    }
+
     preferred-width: 1000px;
     preferred-height: 600px;
 
@@ -75,6 +81,12 @@ export component Fixture inherits Window {
 
 // A window whose dock area is not the whole window.
 export component Inset inherits Window {
+    // The height of the tab bar that `metrics()` gives, which the tests are written against.
+    // The theme's sizes replace those of the metrics when the window is attached.
+    init => {
+        DockTheme.tab-bar-height = 30px;
+    }
+
     preferred-width: 1000px;
     preferred-height: 600px;
 
@@ -105,6 +117,12 @@ export component Inset inherits Window {
 
 // A window whose panels exist only while the window holds them.
 export component Floating inherits Window {
+    // The height of the tab bar that `metrics()` gives, which the tests are written against.
+    // The theme's sizes replace those of the metrics when the window is attached.
+    init => {
+        DockTheme.tab-bar-height = 30px;
+    }
+
     preferred-width: 600px;
     preferred-height: 400px;
 

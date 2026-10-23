@@ -110,7 +110,26 @@ With the `serde` feature, `Layout` can be saved and read with any serde format. 
 
 ### Looks
 
-Set the properties of the `DockTheme` global, from Slint or from Rust. They default to the colours of the Slint style in use. The sizes of tabs, bars and drop zones are in `Metrics`, given to `Dock::with_metrics`.
+Set the properties of the `DockTheme` global, from Slint or from Rust. The colours default to those of the Slint style in use.
+
+| Property | Default | Sets |
+|---|---|---|
+| `tab-bar-background`, `panel-background` | The style's | The strip of tabs, and the area behind a panel |
+| `tab-background`, `tab-hover-background`, `tab-active-background` | Transparent, a faint wash, the style's background | A tab behind, under the pointer, and in front |
+| `tab-foreground`, `tab-active-foreground` | The style's | The title of a tab behind and of the tab in front |
+| `accent` | The style's | A bar under the pointer, and the edge of the drop mark and of the dragged tab |
+| `tab-active-indicator` | `accent` | The 2-pixel line along the top of the tab in front. Transparent draws none |
+| `line` | Transparent | A 1-pixel line along the bottom of each strip of tabs. The tab in front covers it, so it joins its panel. Transparent draws none |
+| `splitter`, `preview` | The style's | The bar between groups, and the drop mark |
+| `font-family` | Empty, which is the window's default | Every text the docking system draws |
+| `font-size` | 12px | The title of a tab |
+| `tab-bar-height` | 28px | The height of the strip of tabs |
+| `splitter-thickness` | 4px | The thickness of the bar between groups |
+| `radius` | 3px | The rounding of the close button and of the dragged tab |
+| `tab-padding` | 10px | The space before a tab's title, and on both sides of the dragged tab's title |
+| `drag-threshold` | 6px | How far the pointer moves with the button down before a tab is dragged |
+
+`tab-bar-height` and `splitter-thickness` are also sizes of the layout. `attach!` gives them to the dock's `Metrics` when the window is attached, and again whenever they change, in place of what `Dock::with_metrics` was given. A dock with more than one window takes them from the window attached or changed last, so give its windows the same sizes. The other sizes, of tabs and drop zones, are in `Metrics`, given to `Dock::with_metrics`.
 
 ## How it works
 

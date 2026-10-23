@@ -104,6 +104,10 @@ impl Dock {
     }
 
     /// A docking system with its own sizes for tabs, splitters and drop zones.
+    ///
+    /// [`attach!`](crate::attach) replaces the height of the tab bar and the thickness of
+    /// the splitter with the window's `DockTheme.tab-bar-height` and
+    /// `DockTheme.splitter-thickness`.
     pub fn with_metrics(layout: Layout, metrics: Metrics) -> Self {
         Dock {
             inner: Rc::new(Inner {
@@ -585,6 +589,20 @@ impl Dock {
         if let Some(weights) = weights {
             let _ = self.apply(Op::SetWeights { split, weights });
         }
+    }
+
+    /// The theme's sizes of the layout, read when a window is attached and whenever they
+    /// change. They replace the same sizes of the metrics.
+    pub fn sizes_changed(&self, tab_bar_height: f32, splitter: f32) {
+        {
+            let mut state = self.inner.state.borrow_mut();
+            if state.metrics.tab_bar_height == tab_bar_height && state.metrics.splitter == splitter {
+                return;
+            }
+            state.metrics.tab_bar_height = tab_bar_height;
+            state.metrics.splitter = splitter;
+        }
+        self.refresh();
     }
 
     /// The operation that dropping the dragged panel at a point leads to, and the area to
