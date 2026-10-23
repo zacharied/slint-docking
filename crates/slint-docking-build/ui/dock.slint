@@ -82,10 +82,14 @@ export global DockTheme {
     in-out property <length> tab-bar-height: 28px;
     // The thickness of the bar between two groups.
     in-out property <length> splitter-thickness: 4px;
+    // The least width of the place the pointer can take the bar between two groups by,
+    // centred on the bar, so that a thin bar can be taken from beside it. The bar is
+    // drawn `splitter-thickness` thick whatever this is.
+    in-out property <length> splitter-grab: 0px;
     // The line along the top of the tab in front. Transparent draws none.
     in-out property <brush> tab-active-indicator: accent;
-    // A line one pixel thick along the bottom of each strip of tabs, which the tab in
-    // front covers, so that it joins its panel. Transparent draws none.
+    // A line one pixel thick along the bottom of each strip of tabs, under all of it but
+    // the tab in front, so that that tab joins its panel. Transparent draws none.
     in-out property <brush> line: transparent;
     // The rounding of the close button and of the dragged tab.
     in-out property <length> radius: 3px;
@@ -224,6 +228,16 @@ component DockTab inherits Rectangle {
         accessible-role: none;
     }
 
+    // The part of the line along the bottom of the strip that is under this tab. It is
+    // drawn over the tab's background, so a tab under the pointer does not hide it.
+    line := Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        visible: !tab.active && DockTheme.line != transparent;
+        background: DockTheme.line;
+        accessible-role: none;
+    }
+
     touch := TouchArea {
         pointer-event(event) => {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
@@ -318,11 +332,14 @@ export component DockArea inherits Rectangle {
         clip: true;
         accessible-role: tab-list;
 
-        // Before the tabs, so that the tab in front, drawn over it, covers it.
+        // The part of the line along the bottom of the strip that no tab takes. Every tab
+        // but the one in front draws the part under itself.
         line := Rectangle {
+            x: group.tabs.length * area.tab-width;
             y: parent.height - 1px;
+            width: max(0px, parent.width - self.x);
             height: 1px;
-            visible: DockTheme.line != transparent;
+            visible: DockTheme.line != transparent && self.width > 0px;
             background: DockTheme.line;
             accessible-role: none;
         }
@@ -367,7 +384,12 @@ export component DockArea inherits Rectangle {
         background: bar-touch.has-hover || bar-touch.pressed ? DockTheme.accent : DockTheme.splitter;
         accessible-role: none;
 
+        // At least `splitter-grab` across, centred on the bar, beyond it if need be.
         bar-touch := TouchArea {
+            x: bar.horizontal ? (parent.width - self.width) / 2 : 0px;
+            y: bar.horizontal ? 0px : (parent.height - self.height) / 2;
+            width: bar.horizontal ? max(parent.width, DockTheme.splitter-grab) : parent.width;
+            height: bar.horizontal ? parent.height : max(parent.height, DockTheme.splitter-grab);
             mouse-cursor: bar.horizontal ? MouseCursor.col-resize : MouseCursor.row-resize;
             moved => {
                 if self.pressed {

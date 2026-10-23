@@ -119,12 +119,13 @@ Set the properties of the `DockTheme` global, from Slint or from Rust. The colou
 | `tab-foreground`, `tab-active-foreground` | The style's | The title of a tab behind and of the tab in front |
 | `accent` | The style's | A bar under the pointer, and the edge of the drop mark and of the dragged tab |
 | `tab-active-indicator` | `accent` | The 2-pixel line along the top of the tab in front. Transparent draws none |
-| `line` | Transparent | A 1-pixel line along the bottom of each strip of tabs. The tab in front covers it, so it joins its panel. Transparent draws none |
+| `line` | Transparent | A 1-pixel line along the bottom of each strip of tabs, under all of it but the tab in front, so that tab joins its panel. A tab under the pointer keeps it. Transparent draws none |
 | `splitter`, `preview` | The style's | The bar between groups, and the drop mark |
 | `font-family` | Empty, which is the window's default | Every text the docking system draws |
 | `font-size` | 12px | The title of a tab |
 | `tab-bar-height` | 28px | The height of the strip of tabs |
 | `splitter-thickness` | 4px | The thickness of the bar between groups |
+| `splitter-grab` | 0px | The least width of the place the pointer takes the bar by, centred on it, so that a thin bar can be taken from beside it. The bar is drawn `splitter-thickness` thick whatever this is |
 | `radius` | 3px | The rounding of the close button and of the dragged tab |
 | `tab-padding` | 10px | The space before a tab's title, and on both sides of the dragged tab's title |
 | `drag-threshold` | 6px | How far the pointer moves with the button down before a tab is dragged |

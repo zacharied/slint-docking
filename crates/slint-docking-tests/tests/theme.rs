@@ -15,9 +15,13 @@ fn indicators(window: &impl ElementRoot) -> Vec<Rect> {
     ElementHandle::find_by_element_id(window, "DockTab::indicator").map(|e| rect(&e)).collect()
 }
 
-/// The hairlines under the strips of tabs, in the order of the layout.
+/// The parts of the hairlines under the strips of tabs: those under tabs, then those under
+/// no tab.
 fn lines(window: &impl ElementRoot) -> Vec<Rect> {
-    ElementHandle::find_by_element_id(window, "DockArea::line").map(|e| rect(&e)).collect()
+    ElementHandle::find_by_element_id(window, "DockTab::line")
+        .chain(ElementHandle::find_by_element_id(window, "DockArea::line"))
+        .map(|e| rect(&e))
+        .collect()
 }
 
 fn transparent() -> Brush {
@@ -96,33 +100,108 @@ fn the_hairline_is_drawn_under_the_tab_bar() {
     assert_eq!(lines(&rig.window), []);
 
     theme.set_line(red());
-    let expected: Vec<Rect> =
-        tab_bars(&rig.window).iter().map(|b| Rect::new(b.x, b.y + b.height - 1.0, b.width, 1.0)).collect();
-    assert_eq!(expected.len(), 3);
-    assert_eq!(lines(&rig.window), expected);
+    check_lines(&rig.window, &[]);
+    assert!(!lines(&rig.window).is_empty());
 
-    // The tab in front covers the line under it: it reaches the bottom of the bar, and it
-    // is drawn after the line.
-    let bars = ElementHandle::find_by_element_id(&rig.window, "DockArea::tab-bar");
-    for ((bar, line), title) in bars.zip(lines(&rig.window)).zip(["Alpha", "Gamma", "Delta"]) {
-        let tab = rect(&tab(&rig.window, title));
-        assert_eq!(tab.y + tab.height, line.y + line.height, "{title}");
-        assert!(tab.x >= line.x && tab.x + tab.width <= line.x + line.width, "{title}");
-        let drawn: Vec<String> = bar
-            .query_descendants()
-            .match_predicate(|e| {
-                e.id().is_some_and(|id| id == "DockArea::line")
-                    || e.type_name().is_some_and(|t| t == "DockTab")
-            })
-            .find_all()
-            .iter()
-            .map(|e| e.accessible_label().map(|l| l.to_string()).unwrap_or_else(|| "line".into()))
-            .collect();
-        assert_eq!(drawn.first().map(String::as_str), Some("line"), "{title}: {drawn:?}");
-        assert!(drawn.iter().any(|d| d == title), "{title}: {drawn:?}");
-    }
+    // A tab behind under the pointer keeps the line under it, whatever its background.
+    theme.set_tab_hover_background(red());
+    let beta = rect(&tab(&rig.window, "Beta"));
+    move_to(&rig.window, beta.center().x, beta.center().y);
+    check_lines(&rig.window, &["Beta"]);
+    let under_beta = Rect::new(beta.x, beta.y + beta.height - 1.0, beta.width, 1.0);
+    assert!(lines(&rig.window).contains(&under_beta), "{:?}", lines(&rig.window));
 
     theme.set_line(transparent());
     assert_eq!(lines(&rig.window), []);
     rig.check();
+}
+
+#[test]
+fn the_splitter_can_be_taken_from_beside_it() {
+    for (grab, resized) in [(8.0, true), (0.0, false)] {
+        let rig = rig(start());
+        let theme = rig.window.global::<DockTheme>();
+        theme.set_splitter_thickness(1.0);
+        theme.set_splitter_grab(grab);
+        i_slint_backend_testing::mock_elapsed_time(std::time::Duration::from_millis(16));
+        let before = rig.layout();
+        let bar = rect(&splitters(&rig.window)[0]);
+        assert_eq!(bar.width, 1.0, "grab {grab}");
+
+        // 3 pixels left of the drawn bar, over Alpha's panel.
+        drag_from(&rig.window, (bar.x - 3.0, 300.0), (500.0, 300.0));
+        let bar = rect(&splitters(&rig.window)[0]);
+        if resized {
+            assert_ne!(rig.layout(), before, "grab {grab}");
+            assert!((bar.center().x - 500.0).abs() <= 4.0, "grab {grab}: {bar:?}");
+        } else {
+            assert_eq!(rig.layout(), before, "grab {grab}");
+        }
+        rig.check();
+    }
+}
+
+/// Checks the line along the bottom of every strip of tabs: it is under all of the strip
+/// but the tab in front, and is drawn over every tab it runs under, of whose title `hovered`
+/// is one.
+fn check_lines(window: &impl ElementRoot, hovered: &[&str]) {
+    let bars: Vec<ElementHandle> = ElementHandle::find_by_element_id(window, "DockArea::tab-bar").collect();
+    assert_eq!(bars.len(), 3);
+    for (bar, front) in bars.iter().zip(["Alpha", "Gamma", "Delta"]) {
+        let b = rect(bar);
+        let front = rect(&tab(window, front));
+        let mut parts: Vec<Rect> = bar
+            .query_descendants()
+            .match_predicate(|e| e.id().is_some_and(|id| id == "DockArea::line" || id == "DockTab::line"))
+            .find_all()
+            .iter()
+            .map(rect)
+            .collect();
+        parts.sort_by(|p, q| p.x.total_cmp(&q.x));
+        // The parts, joined where they meet.
+        let mut runs: Vec<(f32, f32)> = Vec::new();
+        for part in &parts {
+            assert_eq!((part.y, part.height), (b.y + b.height - 1.0, 1.0), "{part:?} in {b:?}");
+            match runs.last_mut() {
+                Some(run) if run.1 == part.x => run.1 = part.x + part.width,
+                _ => runs.push((part.x, part.x + part.width)),
+            }
+        }
+        let expected: Vec<(f32, f32)> = [(b.x, front.x), (front.x + front.width, b.x + b.width)]
+            .into_iter()
+            .filter(|(from, to)| to > from)
+            .collect();
+        assert_eq!(runs, expected, "the line of {b:?}, with the tab in front at {front:?}");
+    }
+    for title in hovered {
+        let t = tab(window, title);
+        let own = t.query_descendants().match_id("DockTab::line").find_all();
+        assert_eq!(own.len(), 1, "{title} draws the line under itself");
+    }
+}
+
+/// Moves the pointer to a point of the window, with no button down.
+fn move_to<W: ComponentHandle>(window: &W, x: f32, y: f32) {
+    use slint::platform::WindowEvent;
+    let position = slint::LogicalPosition::new(x, y);
+    window.window().dispatch_event(WindowEvent::PointerMoved { position });
+}
+
+/// Presses the left button at one point of the window, moves to another in steps, and lets
+/// go there.
+fn drag_from<W: ComponentHandle>(window: &W, from: (f32, f32), to: (f32, f32)) {
+    use slint::platform::{PointerEventButton, WindowEvent};
+    let button = PointerEventButton::Left;
+    let position = slint::LogicalPosition::new(from.0, from.1);
+    window.window().dispatch_event(WindowEvent::PointerMoved { position });
+    window.window().dispatch_event(WindowEvent::PointerPressed { position, button });
+    for step in 1..=10 {
+        let t = step as f32 / 10.0;
+        let position =
+            slint::LogicalPosition::new(from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+        i_slint_backend_testing::mock_elapsed_time(std::time::Duration::from_millis(16));
+        window.window().dispatch_event(WindowEvent::PointerMoved { position });
+    }
+    let position = slint::LogicalPosition::new(to.0, to.1);
+    window.window().dispatch_event(WindowEvent::PointerReleased { position, button });
 }
