@@ -117,10 +117,13 @@ Set the properties of the `DockTheme` global, from Slint or from Rust. The colou
 | `tab-bar-background`, `panel-background` | The style's | The strip of tabs, and the area behind a panel |
 | `tab-background`, `tab-hover-background`, `tab-active-background` | Transparent, a faint wash, the style's background | A tab behind, under the pointer, and in front |
 | `tab-foreground`, `tab-active-foreground` | The style's | The title of a tab behind and of the tab in front |
-| `accent` | The style's | A bar under the pointer, and the edge of the drop mark and of the dragged tab |
+| `accent` | The style's | A bar while it is dragged. Under the pointer alone a bar keeps its colour |
 | `tab-active-indicator` | `accent` | The 2-pixel line along the top of the tab in front. Transparent draws none |
 | `line` | Transparent | A 1-pixel line along the bottom of each strip of tabs, under all of it but the tab in front, so that tab joins its panel. A tab under the pointer keeps it. Transparent draws none |
 | `splitter`, `preview` | The style's | The bar between groups, and the drop mark |
+| `preview-border` | `accent` | The edge of the drop mark |
+| `drag-ghost-background`, `drag-ghost-border` | `tab-active-background`, `accent` | The surface and the edge of the dragged tab |
+| `drag-ghost-opacity` | 0.9 | The opacity of the dragged tab |
 | `font-family` | Empty, which is the window's default | Every text the docking system draws |
 | `font-size` | 12px | The title of a tab |
 | `tab-bar-height` | 28px | The height of the strip of tabs |

@@ -95,6 +95,12 @@ export global DockTheme {
     in-out property <length> radius: 3px;
     // The space before a tab's title, and on both sides of the dragged tab's title.
     in-out property <length> tab-padding: 10px;
+    // The surface, the edge and the opacity of the tab being dragged, beside the pointer.
+    in-out property <brush> drag-ghost-background: tab-active-background;
+    in-out property <brush> drag-ghost-border: accent;
+    in-out property <float> drag-ghost-opacity: 0.9;
+    // The edge of the mark of where a dragged panel would go. `preview` fills it.
+    in-out property <brush> preview-border: accent;
 }
 
 // The link to the Rust side. One per window.
@@ -381,7 +387,8 @@ export component DockArea inherits Rectangle {
         y: area.y;
         width: area.width;
         height: area.height;
-        background: bar-touch.has-hover || bar-touch.pressed ? DockTheme.accent : DockTheme.splitter;
+        // The accent while the bar is being dragged. Under the pointer alone it keeps its colour.
+        background: bar-touch.pressed ? DockTheme.accent : DockTheme.splitter;
         accessible-role: none;
 
         // At least `splitter-grab` across, centred on the bar, beyond it if need be.
@@ -415,21 +422,21 @@ export component DockArea inherits Rectangle {
         visible: DockBackend.preview.shown;
         background: DockTheme.preview;
         border-width: 1px;
-        border-color: DockTheme.accent;
+        border-color: DockTheme.preview-border;
         accessible-role: none;
     }
 
     // The dragged tab, beside the pointer.
-    if DockBackend.dragging: Rectangle {
+    if DockBackend.dragging: ghost := Rectangle {
         x: root.drag-x + 14px;
         y: root.drag-y + 10px;
         width: min(ghost-text.preferred-width + 2 * DockTheme.tab-padding, 200px);
         height: DockTheme.tab-bar-height - 2px;
         border-radius: DockTheme.radius;
-        background: DockTheme.tab-active-background;
+        background: DockTheme.drag-ghost-background;
         border-width: 1px;
-        border-color: DockTheme.accent;
-        opacity: 0.9;
+        border-color: DockTheme.drag-ghost-border;
+        opacity: DockTheme.drag-ghost-opacity;
         accessible-role: none;
 
         ghost-text := Text {

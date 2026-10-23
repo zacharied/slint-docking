@@ -117,6 +117,41 @@ fn the_hairline_is_drawn_under_the_tab_bar() {
 }
 
 #[test]
+fn the_dragged_tab_and_the_drop_mark_take_their_own_colours() {
+    let rig = rig(start());
+    let theme = rig.window.global::<DockTheme>();
+    // The defaults are what the two were drawn with before they had properties of their own.
+    assert_eq!(theme.get_drag_ghost_background(), theme.get_tab_active_background());
+    assert_eq!(theme.get_drag_ghost_border(), theme.get_accent());
+    assert_eq!(theme.get_drag_ghost_opacity(), 0.9);
+    assert_eq!(theme.get_preview_border(), theme.get_accent());
+
+    theme.set_drag_ghost_background(red());
+    theme.set_drag_ghost_border(red());
+    theme.set_drag_ghost_opacity(1.0);
+    theme.set_preview_border(red());
+    assert_eq!(theme.get_drag_ghost_background(), red());
+    assert_eq!(theme.get_drag_ghost_border(), red());
+    assert_eq!(theme.get_preview_border(), red());
+
+    // The testing backend reads no brush of an element, so of what is drawn only the
+    // dragged tab's opacity is checked. The brushes are bound in `dock.slint`.
+    assert_eq!(ElementHandle::find_by_element_id(&rig.window, "DockArea::ghost").count(), 0);
+    drag_and_hold(&rig.window, &tab(&rig.window, "Beta"), 600.0, 160.0);
+    let ghosts: Vec<ElementHandle> =
+        ElementHandle::find_by_element_id(&rig.window, "DockArea::ghost").collect();
+    assert_eq!(ghosts.len(), 1);
+    assert_eq!(ghosts[0].computed_opacity(), 1.0);
+    assert!(preview(&rig.window).is_some(), "the drop mark is shown");
+
+    theme.set_drag_ghost_opacity(0.5);
+    assert_eq!(ghosts[0].computed_opacity(), 0.5);
+    release(&rig.window, 600.0, 160.0);
+    assert_eq!(ElementHandle::find_by_element_id(&rig.window, "DockArea::ghost").count(), 0);
+    rig.check();
+}
+
+#[test]
 fn the_splitter_can_be_taken_from_beside_it() {
     for (grab, resized) in [(8.0, true), (0.0, false)] {
         let rig = rig(start());
