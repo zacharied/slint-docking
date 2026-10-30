@@ -98,7 +98,8 @@ fn main() -> Result<(), slint::PlatformError> {
 |---|---|
 | `layout()`, `set_layout(layout)` | Reads and replaces the layout |
 | `apply(op)` | Applies an operation. Everything the pointer does goes through here too |
-| `open(key)`, `close(key)`, `is_open(key)` | Opens, closes and asks about a panel. A closed panel opens in the group it was closed in, if any panel of that group is still placed |
+| `open(key)`, `close(key)`, `is_open(key)` | Opens, closes and asks about a panel. A closed panel opens at its remembered place: among the tabs of its group, at its old index, or beside the panels it was beside, with its old share of the split, where any of them is still placed. Otherwise it joins the first group |
+| `remembers(key)` | Whether a closed panel has a remembered place it can still open at, so that an application can choose its own place where it has none |
 | `panels()` | Every panel that is known, with its title and whether it is open |
 | `on_layout_changed(f)` | Calls `f` after every change, for saving |
 | `move_to_host(key, host)` | Moves a panel to another window |

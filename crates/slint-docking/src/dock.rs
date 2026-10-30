@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use slint_docking_layout::{Axis, Layout, Metrics, Op, OpError, Point, Rect, Size, Solved, Target, Zone};
+use slint_docking_layout::{
+    Axis, Layout, Metrics, Op, OpError, Place, Point, Rect, Size, Solved, Target, Zone,
+};
 
 use crate::bridge::{GroupView, HostLink, HostView, SplitterView, TabView};
 
@@ -61,8 +63,8 @@ struct State {
     /// For each host, where its dock area is in its window, once that is known.
     areas: Vec<Option<Rect>>,
     drag: Option<Drag>,
-    /// For each panel that was closed, the panels it shared a group with.
-    beside: HashMap<String, Vec<String>>,
+    /// For each panel that is closed, where it was when it was closed. Not saved.
+    remembered: HashMap<String, Place>,
 }
 
 type LayoutListener = Rc<dyn Fn(&Layout)>;
@@ -120,7 +122,7 @@ impl Dock {
                     solved: Vec::new(),
                     areas: Vec::new(),
                     drag: None,
-                    beside: HashMap::new(),
+                    remembered: HashMap::new(),
                 }),
                 links: RefCell::new(Vec::new()),
                 listeners: RefCell::new(Vec::new()),
@@ -147,7 +149,7 @@ impl Dock {
             state.layout = layout;
             state.layout.ensure_host(hosts.saturating_sub(1));
             state.forget_unknown_panels();
-            state.beside.clear();
+            state.remembered.clear();
         }
         self.refresh();
         self.notify();
@@ -193,25 +195,34 @@ impl Dock {
     ///
     /// Everything that changes the layout goes through here, whether it comes from the
     /// pointer or from the application.
+    ///
+    /// A panel that [`Op::Close`] closes is remembered where it was, as
+    /// [`Layout::place_of`] gives it, for [`Dock::open`]. A panel that is placed after an
+    /// operation is remembered nowhere.
     pub fn apply(&self, op: Op) -> Result<bool, OpError> {
         let changed = {
             let mut state = self.inner.state.borrow_mut();
-            match &op {
-                Op::Place { panel, .. } if state.panel(panel).is_none() => {
+            let closed = match &op {
+                Op::Place { panel, .. } | Op::Return { panel, .. } if state.panel(panel).is_none() => {
                     return Err(OpError::UnknownPanel(panel.clone()));
                 }
-                Op::Close { panel } => {
-                    let beside = state.layout.find_panel(panel).and_then(|at| {
-                        let group = state.layout.group(at.group)?;
-                        Some(group.panels().iter().filter(|p| *p != panel).cloned().collect())
-                    });
-                    if let Some(beside) = beside {
-                        state.beside.insert(panel.clone(), beside);
-                    }
+                Op::Close { panel } => Some((panel.clone(), state.layout.place_of(panel))),
+                _ => None,
+            };
+            let changed = state.layout.apply(op)?;
+            let state = &mut *state;
+            match closed {
+                Some((panel, Some(place))) => {
+                    state.remembered.insert(panel, place);
                 }
-                _ => {}
+                Some((panel, None)) => {
+                    state.remembered.remove(&panel);
+                }
+                None => {}
             }
-            state.layout.apply(op)?
+            let layout = &state.layout;
+            state.remembered.retain(|panel, _| !layout.contains(panel));
+            changed
         };
         if changed {
             self.refresh();
@@ -222,29 +233,40 @@ impl Dock {
 
     /// Brings a panel to the front, placing it first if it is closed.
     ///
-    /// A closed panel goes back to the group it was closed in, if any panel of that group
-    /// is still placed. Otherwise it joins the first group of the first host.
+    /// A closed panel returns to where it was when it was closed, with [`Op::Return`]:
+    /// among the tabs of its group, or beside the panels it was beside with its share of
+    /// the split, where any of those panels is still placed. Otherwise it joins the first
+    /// group of the first host.
     pub fn open(&self, panel: &str) -> Result<bool, OpError> {
-        let target = {
+        let op = {
             let state = self.inner.state.borrow();
             if state.layout.contains(panel) {
-                None
+                Op::Activate { panel: panel.into() }
             } else {
-                let beside =
-                    state.beside.get(panel).into_iter().flatten().find_map(|p| state.layout.find_panel(p));
-                Some(match beside {
-                    Some(at) => Target::Group { group: at.group, zone: Zone::Center },
-                    None => match state.layout.groups(0).first() {
-                        Some(group) => Target::Group { group: group.id(), zone: Zone::Center },
-                        None => Target::Edge { host: 0, zone: Zone::Center },
-                    },
-                })
+                match state.remembered.get(panel).filter(|place| state.layout.can_return(place)) {
+                    Some(place) => Op::Return { panel: panel.into(), place: place.clone() },
+                    None => {
+                        let target = match state.layout.groups(0).first() {
+                            Some(group) => Target::Group { group: group.id(), zone: Zone::Center },
+                            None => Target::Edge { host: 0, zone: Zone::Center },
+                        };
+                        Op::Place { panel: panel.into(), target }
+                    }
+                }
             }
         };
-        match target {
-            Some(target) => self.apply(Op::Place { panel: panel.into(), target }),
-            None => self.apply(Op::Activate { panel: panel.into() }),
-        }
+        self.apply(op)
+    }
+
+    /// Whether a panel is closed and is remembered where it was, in a place that it can
+    /// still return to, because a panel of that place is still placed.
+    ///
+    /// Where this is false, [`Dock::open`] puts the panel in the first group, and an
+    /// application that would rather choose a place of its own can apply an [`Op::Place`].
+    pub fn remembers(&self, panel: &str) -> bool {
+        let state = self.inner.state.borrow();
+        !state.layout.contains(panel)
+            && state.remembered.get(panel).is_some_and(|place| state.layout.can_return(place))
     }
 
     /// Closes a panel. The panel stays known, and [`Dock::open`] brings it back.

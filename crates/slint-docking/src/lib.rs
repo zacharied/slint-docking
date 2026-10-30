@@ -70,8 +70,8 @@ mod dock;
 
 pub use dock::{Dock, DragOutside, PanelInfo};
 pub use slint_docking_layout::{
-    Axis, Group, GroupId, Hit, Layout, Location, Metrics, Node, Op, OpError, Point, Rect, Size, Solved,
-    SolvedGroup, SolvedSplit, SolvedSplitter, Split, SplitId, Target, Zone,
+    Axis, Group, GroupId, Hit, Layout, Location, Metrics, Node, Op, OpError, Place, Point, Rect, Size,
+    Solved, SolvedGroup, SolvedSplit, SolvedSplitter, Split, SplitId, Target, Zone,
 };
 
 #[doc(hidden)]

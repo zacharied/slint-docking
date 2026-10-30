@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use crate::place::Place;
 use crate::tree::{Axis, Group, GroupId, Layout, Node, SplitId};
 
 /// Which part of an area a panel is dropped on.
@@ -32,7 +33,7 @@ impl Zone {
     }
 
     /// Whether the dropped panel comes before what was there.
-    fn is_leading(self) -> bool {
+    pub(crate) fn is_leading(self) -> bool {
         matches!(self, Zone::Left | Zone::Top)
     }
 }
@@ -94,6 +95,25 @@ pub enum Op {
         /// One weight per child, each positive.
         weights: Vec<f32>,
     },
+    /// Puts a panel at a place it was remembered to have been, as [`Layout::place_of`]
+    /// gave it. If the panel is already placed it moves. The panel becomes the shown panel
+    /// of its group.
+    ///
+    /// For [`Place::Tabs`], it joins the group of the first of the panels that is still
+    /// placed, at the index, or after the last tab where the group has fewer tabs.
+    ///
+    /// For [`Place::Beside`], it goes in the host of the first of the panels that is still
+    /// placed, beside the smallest area of that host that holds those of them it holds,
+    /// on the side the zone gives. Where that area is a part of a split along the zone's
+    /// axis, or a run of parts of one, the panel joins that split with the share, and the
+    /// other parts keep their shares among themselves. Otherwise the area is split along
+    /// the axis between it and the panel, which takes the share.
+    Return {
+        /// The key of the panel.
+        panel: String,
+        /// Where it goes.
+        place: Place,
+    },
 }
 
 /// Why an operation was refused. The layout is unchanged.
@@ -111,6 +131,8 @@ pub enum OpError {
     HostNotEmpty(usize),
     /// The weights are not one positive number per child.
     BadWeights,
+    /// A panel was to return to a place, and no panel that the place names is placed.
+    NothingToReturnTo(String),
 }
 
 impl fmt::Display for OpError {
@@ -124,6 +146,9 @@ impl fmt::Display for OpError {
                 write!(f, "host {host} is not empty, so its centre is not a target")
             }
             OpError::BadWeights => write!(f, "the weights are not one positive number per child"),
+            OpError::NothingToReturnTo(panel) => {
+                write!(f, "the panel {panel} has nothing to return to, as no panel of its place is placed")
+            }
         }
     }
 }
@@ -173,6 +198,7 @@ impl Layout {
                 split.weights = weights.into_iter().map(|w| w / total).collect();
                 Ok(())
             }
+            Op::Return { panel, place } => self.return_to(panel, place),
         }
     }
 

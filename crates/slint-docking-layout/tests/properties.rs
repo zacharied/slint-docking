@@ -66,6 +66,30 @@ fn size() -> impl Strategy<Value = Size> {
     (0.0..2000.0f32, 0.0..1500.0f32).prop_map(|(w, h)| Size::new(w.round(), h.round()))
 }
 
+/// Whether two trees are the same: the same splits and groups, the same panels shown,
+/// and weights within 1e-4, since closing and returning divide and multiply them.
+fn same(a: &Node, b: &Node) -> bool {
+    match (a, b) {
+        (Node::Group(a), Node::Group(b)) => a.panels() == b.panels() && a.active_index() == b.active_index(),
+        (Node::Split(a), Node::Split(b)) => {
+            a.axis() == b.axis()
+                && a.children().len() == b.children().len()
+                && a.weights().iter().zip(b.weights()).all(|(a, b)| (a - b).abs() <= 1e-4)
+                && a.children().iter().zip(b.children()).all(|(a, b)| same(a, b))
+        }
+        _ => false,
+    }
+}
+
+fn same_layout(a: &Layout, b: &Layout) -> bool {
+    a.host_count() == b.host_count()
+        && (0..a.host_count()).all(|h| match (a.root(h), b.root(h)) {
+            (None, None) => true,
+            (Some(a), Some(b)) => same(a, b),
+            _ => false,
+        })
+}
+
 fn start() -> Layout {
     Layout::with_hosts(vec![
         Some(Node::row([
@@ -213,6 +237,40 @@ proptest! {
             let op = Op::Place { panel: PANELS[panel].into(), target: hit.target };
             prop_assert!(layout.apply(op).is_ok());
             prop_assert_eq!(layout.check(), Ok(()));
+        }
+    }
+
+    /// A panel closed and returned to the place it was closed from gives back the layout.
+    #[test]
+    fn closing_and_returning_gives_back_the_layout(
+        steps in prop::collection::vec(step(), 0..40),
+        size in size(),
+    ) {
+        let metrics = Metrics::default();
+        let mut layout = start();
+        for step in &steps {
+            if let Some(op) = take(&mut layout, step, size, &metrics) {
+                let _ = layout.apply(op);
+            }
+        }
+        let panels: Vec<String> = layout.panels().into_iter().map(Into::into).collect();
+        for panel in panels {
+            let mut shown = layout.clone();
+            shown.apply(Op::Activate { panel: panel.clone() }).expect("placed");
+            let Some(place) = shown.place_of(&panel) else { continue };
+            let mut back = shown.clone();
+            back.apply(Op::Close { panel: panel.clone() }).expect("placed");
+            prop_assert!(back.can_return(&place), "{:?} from {}", place, shown);
+            back.apply(Op::Return { panel: panel.clone(), place: place.clone() }).expect("accepted");
+            prop_assert_eq!(back.check(), Ok(()));
+            prop_assert!(
+                same_layout(&back, &shown),
+                "{} closed and returned to {:?} from {} gave {}",
+                panel,
+                place,
+                shown,
+                back
+            );
         }
     }
 }

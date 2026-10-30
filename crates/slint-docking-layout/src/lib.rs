@@ -7,6 +7,8 @@
 //! - A layout changes only through [`Layout::apply`], which takes an [`Op`].
 //! - [`Layout::solve`] turns a host and a size into rectangles.
 //! - [`Layout::target_at`] turns a point into the [`Target`] a drop there would have.
+//! - [`Layout::place_of`] says where a panel is, as a [`Place`] that [`Op::Return`]
+//!   puts it back at once it is closed.
 //!
 //! Panels are named by keys, which are strings the application chooses.
 //!
@@ -38,11 +40,13 @@
 mod geometry;
 mod hit;
 mod ops;
+mod place;
 mod solve;
 mod tree;
 
 pub use geometry::{Point, Rect, Size};
 pub use hit::Hit;
 pub use ops::{Op, OpError, Target, Zone};
+pub use place::Place;
 pub use solve::{Metrics, Solved, SolvedGroup, SolvedSplit, SolvedSplitter};
 pub use tree::{Axis, Group, GroupId, Layout, Location, Node, Split, SplitId};

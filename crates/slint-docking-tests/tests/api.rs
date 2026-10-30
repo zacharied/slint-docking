@@ -35,10 +35,67 @@ fn a_closed_panel_opens_where_it_was() {
     assert_eq!(rig.dock.open("b"), Ok(true));
     assert_eq!(rig.layout(), "row(25: tabs(a, b*), 75: col(50: tabs(c*), 50: tabs(d*)))");
 
-    // With nothing left of the group it was in, it joins the first group.
+    // Alone in its group, it returns beside the panel it was beside, with its share.
+    let column = rig.dock.layout().splits(0)[1].id();
+    rig.dock.apply(Op::SetWeights { split: column, weights: vec![0.7, 0.3] }).expect("accepted");
     rig.dock.close("d").expect("placed");
+    assert_eq!(rig.layout(), "row(25: tabs(a, b*), 75: tabs(c*))");
     assert_eq!(rig.dock.open("d"), Ok(true));
+    assert_eq!(rig.layout(), "row(25: tabs(a, b*), 75: col(70: tabs(c*), 30: tabs(d*)))");
+    rig.check();
+}
+
+#[test]
+fn a_closed_panel_alone_returns_with_its_share() {
+    let rig = rig(Layout::new(Node::row([(60.0, Node::tabs(["a"])), (40.0, Node::tabs(["b"]))])));
+    rig.dock.close("b").expect("placed");
+    assert_eq!(rig.layout(), "tabs(a*)");
+    assert_eq!(rig.dock.open("b"), Ok(true));
+    assert_eq!(rig.layout(), "row(60: tabs(a*), 40: tabs(b*))");
+    rig.check();
+}
+
+#[test]
+fn the_remembered_place_is_forgotten_when_the_panel_opens() {
+    let rig = rig(start());
+    rig.dock.close("d").expect("placed");
+    assert!(rig.dock.remembers("d"));
+    rig.dock.open("d").expect("known");
+    assert!(!rig.dock.remembers("d"));
+
+    // Moved and closed again, it opens where it was last, not beside Gamma.
+    let group = rig.dock.layout().find_panel("a").expect("placed").group;
+    let op = Op::Place { panel: "d".into(), target: Target::Group { group, zone: Zone::Center } };
+    rig.dock.apply(op).expect("accepted");
+    rig.dock.close("d").expect("placed");
+    rig.dock.open("d").expect("known");
     assert_eq!(rig.layout(), "row(25: tabs(a, b, d*), 75: tabs(c*))");
+    rig.check();
+}
+
+#[test]
+fn a_new_layout_forgets_every_remembered_place() {
+    let rig = rig(start());
+    rig.dock.close("d").expect("placed");
+    rig.dock.set_layout(Layout::new(Node::row([(1.0, Node::tabs(["a", "b"])), (1.0, Node::tabs(["c"]))])));
+    assert!(!rig.dock.remembers("d"));
+    assert_eq!(rig.dock.open("d"), Ok(true));
+    assert_eq!(rig.layout(), "row(50: tabs(a, b, d*), 50: tabs(c*))");
+    rig.check();
+}
+
+#[test]
+fn remembers_says_whether_the_place_is_usable() {
+    let rig = rig(start());
+    assert!(!rig.dock.remembers("d"), "an open panel");
+    assert!(!rig.dock.remembers("zzz"), "an unknown panel");
+    rig.dock.close("d").expect("placed");
+    assert!(rig.dock.remembers("d"));
+    // Gamma was all that Delta was beside.
+    rig.dock.close("c").expect("placed");
+    assert!(!rig.dock.remembers("d"));
+    assert_eq!(rig.dock.open("d"), Ok(true));
+    assert_eq!(rig.layout(), "tabs(a, b, d*)");
     rig.check();
 }
 
@@ -62,7 +119,8 @@ fn every_panel_can_be_closed_and_opened_again() {
         rig.dock.open(key).expect("known");
         rig.check();
     }
-    assert_eq!(rig.layout(), "tabs(d, c, b, a*)");
+    // Each returns beside the panels opened before it, so the layout is as it was.
+    assert_eq!(rig.layout(), "row(25: tabs(a*, b), 75: col(50: tabs(c*), 50: tabs(d*)))");
 }
 
 #[test]
